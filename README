@@ -12,3 +12,7 @@ and build all assets contained in the 'assets' directory.  It will
 also build the .html and JS code for each .js file in the 'templates'
 directoy (each .js file may optionally have an associated .html file).
 
+The tool has no dependency checking.  It blindly builds everything it
+finds.
+
+Use -h for help.
