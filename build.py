@@ -254,7 +254,7 @@ def configure(env, options):
     else:
         env_path_expt = os.path.join(sdk_root, 'env')
 
-    if env_path != env_path_expt:
+    if env_path.lower() != env_path_expt.lower():
         print "[Error] The environment you are running from is not the same as expected for the target SDK"
         print "Expected: %s, Actual: %s" % (env_path_expt, env_path)
         print "You may need to activate a different SDK environment."
@@ -1012,9 +1012,16 @@ def main():
 
         if not options.code_only:
 
+            print ""
+            print "----------------------------------------------------------"
+            print "   ASSET BUILD (may be slow - disable with --code-only)"
+            print "----------------------------------------------------------"
+            print ""
+
             # Mapping table
 
-            os.makedirs('staticmax')
+            if not os.path.exists('staticmax'):
+               os.makedirs('staticmax')
             (mapping_table_obj, build_deps) = gen_mapping('assets', 'staticmax')
 
             # Write mapping table
@@ -1024,7 +1031,7 @@ def main():
 
             # Build all asset files
 
-            print "Deps: %s" % build_deps
+            # print "Deps: %s" % build_deps
 
             for src in build_deps:
                 dest = build_deps[src]
@@ -1037,11 +1044,17 @@ def main():
 
         # Code
 
+        print ""
+        print "----------------------------------------------------------"
+        print "                   CODE BUILD"
+        print "----------------------------------------------------------"
+        print ""
+
         code_files = glob.glob('templates/*.js')
         # print "CODE FILES: %s" % code_files
 
         for f in code_files:
-            print " F: %s" % f
+            print " APP: %s" % f
             (code_base, code_ext) = os.path.splitext(os.path.split(f)[1])
 
             code_dests = [ code_base + ".canvas.debug.html",
@@ -1054,7 +1067,7 @@ def main():
                            code_base + ".release.html",
                            code_base + ".tzjs" ]
 
-            print "  CODE:FILES: %s" % code_dests
+            # print "  CODE:FILES: %s" % code_dests
 
             for dest in code_dests:
                 do_build_code(dest, env, options)
