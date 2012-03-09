@@ -2,21 +2,19 @@
 
 import os
 import sys
+import glob
 
 from platform import system, machine
 from subprocess import Popen, PIPE, STDOUT
-
 from simplejson import loads as json_loads, dump as json_dump, JSONDecodeError
 import yaml
-
 from hashlib import sha1
 import base64
-
 from shutil import copyfile, rmtree
-
 from optparse import OptionParser
-
 from distutils.version import StrictVersion
+
+from genmapping import gen_mapping
 
 BUILDVERSION = '0.9.1'
 
@@ -56,11 +54,12 @@ def check_path_py_tools(env, options):
     if os.path.exists(path):
         env[env_name] = path
     else:
-        print "[Warning] Can't find optional %s path (Not set): %s" % (env_name, pytools_root)
+        print "[Warning] Can't find optional %s path (Not set)" % (env_name)
     return (env_name, path)
 
 
-def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, default_arg=None):
+def check_py_tool(env_name, tool_name, env, options, exp_version_str=None,
+                  default_arg=None):
 
     if env_name is None or env_name == '':
         print "[Error] No env_name specified"
@@ -76,13 +75,16 @@ def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, defau
         print "[Error] Missing required env: %s " % str(e)
         return (env_name, None)
 
-    if turbulenz_os == 'macosx' or turbulenz_os == 'linux64' or turbulenz_os or 'linux32':
+    if turbulenz_os == 'macosx' or turbulenz_os == 'linux64' or turbulenz_os == 'linux32':
         tool = tool_name + '.py'
     elif turbulenz_os == 'win32':
         tool = 'python -m ' + tool_name
     else:
         print "[Error] Platform not recognised. Cannot configure build."
         return (env_name, None)
+
+    print "turbulenz_os: %s" % turbulenz_os
+    print "TOOL: %s" % tool
 
     # Check tool runs
     if options.verbose:
@@ -91,7 +93,9 @@ def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, defau
     if default_arg:
         args.append(default_arg)
     try:
-        result = exec_command(args, verbose=options.verbose, console=options.verbose)
+        result = exec_command(args,
+                              verbose=options.verbose,
+                              console=options.verbose)
     except CalledProcessError:
         print "[Warning] Failed to run tool as: "
         print args
@@ -259,7 +263,6 @@ def configure(env, options):
 
     env['ENV_PATH'] = env_path
 
-
     env['APP_ROOT'] = app_root
     env['APP_PAIR'] = (app_root + ',./')
     env['SDK_ROOT'] = sdk_root
@@ -277,9 +280,15 @@ def configure(env, options):
                         HTML2TZHTML=True, \
                         CGFX2JSON=False)
     else:
-        required = dict(MAKETZJS=True, \
-                        MAKEHTML=True, \
-                        CGFX2JSON=False)
+        required = dict(MAKETZJS=True,   \
+                        MAKEHTML=True,   \
+                        CGFX2JSON=False \
+                        )
+
+    (DAE2JSON, dae2json) = check_py_tool('DAE2JSON', 'dae2json', env, options)
+    if dae2json is None:
+        raise Exception("can't find dae2json tool")
+    print("dae2json: %s" % env['DAE2JSON'])
 
     for (env_name, req) in required.iteritems():
         if env_name == 'JS2TZJS':
@@ -351,7 +360,9 @@ class CalledProcessError(Exception):
         return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.retcode)
 # pylint: enable=W0231
 
-def exec_command(command, cwd=None, env=None, verbose=True, console=False, ignore=False, shell=False, wait=True):
+def exec_command(command, cwd=None, env=None, verbose=True, console=False,
+                 ignore=False, shell=True, wait=True):
+
     if isinstance(command, list):
         command_list = command
         command_string = ' '.join(command)
@@ -359,14 +370,16 @@ def exec_command(command, cwd=None, env=None, verbose=True, console=False, ignor
         command_list = command.split()
         command_string = command
 
+    print "exec_command: %s" % command_string
+
     if verbose:
         print('Executing: %s' % command_string)
 
     if wait:
         if console:
-            process = Popen(command_list, stderr=STDOUT, cwd=cwd, shell=shell)
+            process = Popen(command_string, stderr=STDOUT, cwd=cwd, shell=shell)
         else:
-            process = Popen(command_list, stdout=PIPE, stderr=STDOUT, cwd=cwd, shell=shell)
+            process = Popen(command_string, stdout=PIPE, stderr=STDOUT, cwd=cwd, shell=shell)
 
         output, _ = process.communicate()
         output = str(output)
@@ -441,7 +454,7 @@ def run_makehtml(env, options, input=None, mode=None, output=None, templates=[],
                 args.append(input)
         if template is not None:
                 args.append(template)
-        return exec_command(args, verbose=options.verbose, console=True)
+        return exec_command(args, verbose=options.verbose, console=True, shell=True)
 
 def run_maketzjs(env, options, input=None, mode=None, output=None, templates=[]):
         try:
@@ -553,155 +566,120 @@ def clean(env, options):
         result = 1
     return result
 
-def build(files, env, options):
+############################################################
+
+def do_build_code(filepath, env, options):
 
     builderror = 0
     templates=[env['APP_ROOT'], env['APP_TEMPLATES'], env['APP_JSLIB']]
 
-    for f in files:
-        filepath = f.lower()
-        (filename, ext) = os.path.splitext(f)
+    (filename, ext) = os.path.splitext(filepath)
 
-        if ext == '.html':
-            (appname, buildtype) = os.path.splitext(filename)
-            if buildtype is not None:
-                try:
-                    if env['SDK_VERSION'] < StrictVersion('0.19.0'):
-                        if buildtype == '.development':
-                            run_html_dev({
-                                    'inputs': [appname + '.html', appname + '.jsinc'],
-                                    'outputs': [filepath],
-                                    'env': env,
-                                    'options': options
-                                })
+    if ext == '.html':
+        (appname, buildtype) = os.path.splitext(filename)
 
+        html_templates = [ t + "/" + appname + ".html" for t in templates ]
+        html_templates = [ t for t in html_templates if os.path.exists(t) ]
+        print "HTML templates: %s" % html_templates
+        print "buildtype: %s" % buildtype
+
+        if buildtype is not None:
+            try:
+                (appname, target) = os.path.splitext(appname)
+                if buildtype == '.development':
+                    if options.verbose:
+                        print "[Warning] 'development' should now be 'debug' and has not been built. Change the name of the destination file"
+                else:
+                    if target == '.canvas':
+                        if buildtype == '.debug':
+                                run_makehtml(env, options,
+                                        input=(appname + '.js'),
+                                        mode='canvas-debug',
+                                        output=filepath,
+                                        templates=templates,
+                                        template=" ".join(html_templates))
                         elif buildtype == '.release':
-                            run_html_rel({
-                                    'inputs': [appname + '.html'],
-                                    'outputs': [filepath],
-                                    'env': env,
-                                    'options': options
-                                })
-                    else:
-                        (appname, target) = os.path.splitext(appname)
-                        if buildtype == '.development':
-                            if options.verbose:
-                                print "[Warning] 'development' should now be 'debug' and has not been built. Change the name of the destination file"
+                                run_makehtml(env, options,
+                                        input=(appname + '.js'),
+                                        mode='canvas',
+                                        output=filepath,
+                                        templates=templates,
+                                        code=(appname + target + '.js'),
+                                        template=" ".join(html_templates))
                         else:
-                            if target == '.canvas':
-                                if buildtype == '.debug':
-                                        run_makehtml(env, options,
-                                                input=(appname + '.js'),
-                                                mode='canvas-debug',
-                                                output=filepath,
-                                                templates=templates,
-                                                template=(appname + '.html'))
-                                elif buildtype == '.release':
-                                        run_makehtml(env, options,
-                                                input=(appname + '.js'),
-                                                mode='canvas',
-                                                output=filepath,
-                                                templates=templates,
-                                                code=(appname + target + '.js'),
-                                                template=(appname + '.html'))
-                                else:
-                                    if options.verbose:
-                                        print "[Warning] Build type not recognised: %s" % buildtype
-                            if target == '.default':
-                                (appname, defaultTarget) = os.path.splitext(appname)
-                                if defaultTarget == '.canvas':
-                                    if buildtype == '.debug':
-                                        run_makehtml(env, options,
-                                                input=(appname + '.js'),
-                                                mode='canvas-debug',
-                                                output=filepath,
-                                                templates=templates)
-                                    elif buildtype == '.release':
-                                        run_makehtml(env, options,
-                                                input=(appname + '.js'),
-                                                mode='canvas',
-                                                code=(appname + defaultTarget + '.js'),
-                                                output=filepath,
-                                                templates=templates)
-                                    else:
-                                        if options.verbose:
-                                            print "[Warning] Build type not recognised: %s" % buildtype
-                                if defaultTarget == '':
-                                    if buildtype == '.debug':
-                                        run_makehtml(env, options,
-                                                input=(appname + '.js'),
-                                                mode='plugin-debug',
-                                                output=filepath,
-                                                templates=templates)
-                                    elif buildtype == '.release':
-                                        run_makehtml(env, options,
-                                                input=(appname + '.js'),
-                                                mode='plugin',
-                                                code=(appname + '.tzjs'),
-                                                output=filepath,
-                                                templates=templates)
-                                    else:
-                                        if options.verbose:
-                                            print "[Warning] Build type not recognised: %s" % buildtype
-                                if buildtype == '.debug':
-                                    run_makehtml(env, options,
-                                            input=(appname + '.js'),
-                                            mode='plugin-debug',
-                                            output=filepath,
-                                            templates=templates)
-                                elif buildtype == '.release':
-                                    run_makehtml(env, options,
-                                            input=(appname + '.js'),
-                                            mode='plugin',
-                                            output=filepath,
-                                            templates=templates)
-                                else:
-                                    if options.verbose:
-                                        print "[Warning] Build type not recognised: %s" % buildtype
-                            elif target == '':
-                                # Blank target is plugin
-                                if buildtype == '.debug':
-                                    run_makehtml(env, options,
-                                            input=(appname + '.js'),
-                                            mode='plugin-debug',
-                                            output=filepath,
-                                            templates=templates,
-                                            template=(appname + '.html'))
-                                elif buildtype == '.release':
-                                    run_makehtml(env, options,
-                                            input=(appname + '.js'),
-                                            mode='plugin',
-                                            code=(appname + target + '.tzjs'),
-                                            output=filepath,
-                                            templates=templates,
-                                            template=(appname + '.html'))
-                                else:
-                                    if options.verbose:
-                                        print "[Warning] Build type not recognised: %s" % buildtype
+                            if options.verbose:
+                                print "[Warning] Build type not recognised: %s" % buildtype
+                    if target == '.default':
+                        (appname, defaultTarget) = os.path.splitext(appname)
+                        if defaultTarget == '.canvas':
+                            if buildtype == '.debug':
+                                run_makehtml(env, options,
+                                        input=(appname + '.js'),
+                                        mode='canvas-debug',
+                                        output=filepath,
+                                        templates=templates)
+                            elif buildtype == '.release':
+                                run_makehtml(env, options,
+                                        input=(appname + '.js'),
+                                        mode='canvas',
+                                        code=(appname + defaultTarget + '.js'),
+                                        output=filepath,
+                                        templates=templates)
                             else:
                                 if options.verbose:
-                                    print "[Warning] Target not recognised: %s" % target
-                except CalledProcessError as e:
-                    builderror = 1
-                    print '[ERROR] Command failed: ' + str(e)
-
-        elif ext == '.tzjs':
-            try:
-                if env['SDK_VERSION'] < StrictVersion('0.19.0'):
-                    run_js2tzjs({
-                        'inputs': [filename + '.js'],
-                        'outputs': [filepath],
-                        'env': env,
-                        'options': options
-                    })
-                else:
-                    (appname, target) = os.path.splitext(filename)
-                    if target == '':
-                        run_maketzjs(env, options,
-                                mode='plugin',
-                                input=(appname + '.js'),
-                                output=filepath,
-                                templates=templates)
+                                    print "[Warning] Build type not recognised: %s" % buildtype
+                        if defaultTarget == '':
+                            if buildtype == '.debug':
+                                run_makehtml(env, options,
+                                        input=(appname + '.js'),
+                                        mode='plugin-debug',
+                                        output=filepath,
+                                        templates=" ".join(html_templates))
+                            elif buildtype == '.release':
+                                run_makehtml(env, options,
+                                        input=(appname + '.js'),
+                                        mode='plugin',
+                                        code=(appname + '.tzjs'),
+                                        output=filepath,
+                                        templates=" ".join(html_templates))
+                            else:
+                                if options.verbose:
+                                    print "[Warning] Build type not recognised: %s" % buildtype
+                        if buildtype == '.debug':
+                            run_makehtml(env, options,
+                                    input=(appname + '.js'),
+                                    mode='plugin-debug',
+                                    output=filepath,
+                                    templates=" ".join(html_templates))
+                        elif buildtype == '.release':
+                            run_makehtml(env, options,
+                                    input=(appname + '.js'),
+                                    mode='plugin',
+                                    output=filepath,
+                                    templates=" ".join(html_templates))
+                        else:
+                            if options.verbose:
+                                print "[Warning] Build type not recognised: %s" % buildtype
+                    elif target == '':
+                        # Blank target is plugin
+                        if buildtype == '.debug':
+                            run_makehtml(env, options,
+                                    input=(appname + '.js'),
+                                    mode='plugin-debug',
+                                    output=filepath,
+                                    templates=templates,
+                                    template=" ".join(html_templates))
+                        elif buildtype == '.release':
+                            run_makehtml(env, options,
+                                    input=(appname + '.js'),
+                                    mode='plugin',
+                                    code=(appname + target + '.tzjs'),
+                                    output=filepath,
+                                    templates=templates,
+                                    template=" ".join(html_templates))
+                        else:
+                            if options.verbose:
+                                print "[Warning] Build type not recognised: %s" % buildtype
                     else:
                         if options.verbose:
                             print "[Warning] Target not recognised: %s" % target
@@ -709,45 +687,85 @@ def build(files, env, options):
                 builderror = 1
                 print '[ERROR] Command failed: ' + str(e)
 
-        elif ext == '.js':
-            try:
-                if env['SDK_VERSION'] >= StrictVersion('0.19.0'):
-                    (appname, target) = os.path.splitext(filename)
-                    if target == '.canvas':
-                        run_maketzjs(env, options,
-                                mode='canvas',
-                                input=(appname + '.js'),
-                                output=filepath,
-                                templates=templates)
-                    else:
-                        if options.verbose:
-                            print "[Warning] Target not recognised: %s" % target
-            except CalledProcessError as e:
-                builderror = 1
-                print '[ERROR] Command failed: ' + str(e)
-
-        elif ext == '.jsinc':
-            try:
-                run_js2tzjs_jsinc({
+    elif ext == '.tzjs':
+        try:
+            if env['SDK_VERSION'] < StrictVersion('0.19.0'):
+                run_js2tzjs({
                     'inputs': [filename + '.js'],
                     'outputs': [filepath],
                     'env': env,
                     'options': options
                 })
-            except CalledProcessError as e:
-                builderror = 1
-                print '[ERROR] Command failed: ' + str(e)
+            else:
+                (appname, target) = os.path.splitext(filename)
+                if target == '':
+                    run_maketzjs(env, options,
+                            mode='plugin',
+                            input=(appname + '.js'),
+                            output=filepath,
+                            templates=templates)
+                else:
+                    if options.verbose:
+                        print "[Warning] Target not recognised: %s" % target
+        except CalledProcessError as e:
+            builderror = 1
+            print '[ERROR] Command failed: ' + str(e)
 
-        elif ext == '.cgfx':
-            try:
-                filepath_src = os.path.join(env['APP_SHADERS'], filename + ext)
-                filepath_tgt = os.path.join(env['APP_SHADERS'], filename + ext + '.json')
-                run_cgfx2json(env, options,
-                        input=filepath_src,
-                        output=filepath_tgt)
-            except CalledProcessError as e:
-                builderror = 1
-                print '[ERROR] Command failed: ' + str(e)
+    elif ext == '.js':
+        try:
+            if env['SDK_VERSION'] >= StrictVersion('0.19.0'):
+                (appname, target) = os.path.splitext(filename)
+                if target == '.canvas':
+                    run_maketzjs(env, options,
+                            mode='canvas',
+                            input=(appname + '.js'),
+                            output=filepath,
+                            templates=templates)
+                else:
+                    if options.verbose:
+                        print "[Warning] Target not recognised: %s" % target
+        except CalledProcessError as e:
+            builderror = 1
+            print '[ERROR] Command failed: ' + str(e)
+
+    elif ext == '.jsinc':
+        try:
+            run_js2tzjs_jsinc({
+                'inputs': [filename + '.js'],
+                'outputs': [filepath],
+                'env': env,
+                'options': options
+            })
+        except CalledProcessError as e:
+            builderror = 1
+            print '[ERROR] Command failed: ' + str(e)
+
+
+
+
+def do_build(src, dest, env, options):
+
+    builderror = 0
+    templates=[env['APP_ROOT'], env['APP_TEMPLATES'], env['APP_JSLIB']]
+
+    (filename, ext) = os.path.splitext(src)
+
+    if ext == '.cgfx':
+        try:
+            run_cgfx2json(env, options, input=src, output=dest)
+        except CalledProcessError as e:
+            builderror = 1
+            print '[ERROR] Command failed: ' + str(e)
+
+    elif ext == '.dae':
+        try:
+            exec_command("%s -i %s -o %s" % (env['DAE2JSON'], src, dest))
+        except CalledProcessError as e:
+            builderror = 1
+            print '[ERROR] Command failed: ' + str(e)
+
+    else:
+        copyfile(src, dest)
 
     return builderror
 
@@ -939,6 +957,7 @@ def main():
     shaders = [] # Ignore temporarily ['draw2D']
 
     parser = OptionParser()
+
     parser.add_option('--build-only', action='store_true', \
                         default=False, \
                         help="Only builds")
@@ -987,21 +1006,72 @@ def main():
     if len(args) > 0:
         files = args
     else:
-        files = []
-        for s in shaders:
-            files.append('%s.cgfx' % s)
 
-        result = build(files, env, options)
-        if result == 0:
-            print 'Built Assets'
-        else:
-            print 'Failed to build assets'
-            return result
+        # Mapping table
 
-    if yaml2json('mapping_table', 'mapping_table', True, env, options) == 0:
-        print 'Built Mapping Table'
-    else:
-        print 'Failed Mapping Table'
+        os.makedirs('staticmax')
+        (mapping_table_obj, build_deps) = gen_mapping('assets', 'staticmax')
+
+        # Write mapping table
+
+        with open('mapping_table.json', 'wb') as f:
+            json_dump(mapping_table_obj, f, separators=(',', ':'))
+
+        # Build all asset files
+
+        print "Deps: %s" % build_deps
+
+        for src in build_deps:
+            dest = build_deps[src]
+            print "Building %s -> %s" % (src, dest)
+
+            result = do_build(src, dest, env, options)
+            if result:
+                print "Build failed"
+                exit(1)
+
+        # Code
+
+        code_files = glob.glob('templates/*.js')
+        print "CODE FILES: %s" % code_files
+
+        for f in code_files:
+            print " F: %s" % f
+            (code_base, code_ext) = os.path.splitext(os.path.split(f)[1])
+
+            code_dests = [ code_base + ".canvas.debug.html",
+
+                           code_base + ".canvas.release.html",
+                           code_base + ".canvas.js",
+
+                           code_base + ".debug.html",
+
+                           code_base + ".release.html",
+                           code_base + ".tzjs" ]
+
+            print "  CODE:FILES: %s" % code_dests
+
+            for dest in code_dests:
+                do_build_code(dest, env, options)
+
+        print "DONE"
+        exit(0)
+
+        # files = []
+        # for s in shaders:
+        #     files.append('%s.cgfx' % s)
+
+        # result = build(files, env, options)
+        # if result == 0:
+        #     print 'Built Assets'
+        # else:
+        #     print 'Failed to build assets'
+        #     return result
+
+    # if yaml2json('mapping_table', 'mapping_table', True, env, options) == 0:
+    #     print 'Built Mapping Table'
+    # else:
+    #     print 'Failed Mapping Table'
 
     if len(args) > 0:
         files = args

@@ -55,6 +55,51 @@ def get_file_hash(filename):
 def get_target_filename(filename):
     f_hash = get_file_hash(filename);
 
+############################################################
+
+def gen_mapping(asset_dir, staticmax_root, ignore_exts = []):
+
+    def _ext_format(ext):
+        if ext[0] == '.':
+            return ext
+        else:
+            return '.'+ext
+    not_json = [ '.png', '.jpg', '.jpeg', '.dds', '.tga',
+                 '.mp3', '.ogg' ]
+    ignore = [ '.cgh', '.mb', '.txt' ] + \
+        [ _ext_format(e) for e in ignore_exts ]
+
+    mapping_table = {}
+    build_deps = {}
+
+    for root, dirs, files in os.walk(asset_dir):
+        LOG.info("root: %s, dirs: %s, files: %s" % (root, dirs, files))
+
+        root_rel = os.path.relpath(root, asset_dir)
+        for f in files:
+            f_fullpath = os.path.join(root, f).replace('\\', '/')
+            f_path = os.path.join(root_rel, f).replace('\\', '/')
+            f_hash = get_file_hash(f_fullpath)
+            f_ext = os.path.splitext(f)[1]
+
+            if f_ext in ignore:
+                continue
+
+            target_name = f_hash + f_ext
+            if not f_ext in not_json:
+                target_name = target_name + ".json"
+
+            target_path = os.path.join(staticmax_root, target_name)
+            target_path = target_path.replace('\\', '/')
+
+            mapping_table[f_path] = target_name
+            build_deps[f_fullpath] = target_path
+
+            LOG.info("FILE: %s (%s) -> %s" % (f_path, f_ext, target_path))
+
+    mapping_table_object = { "urnmapping" : mapping_table }
+    return (mapping_table_object, build_deps)
+
 def main():
 
     (options, args, parser) = simple_options(_parser, __version__,
@@ -79,47 +124,16 @@ def main():
         parser.print_help()
         exit(1)
 
-    def _ext_format(ext):
-        if ext[0] == '.':
-            return ext
-        else:
-            return '.'+ext
-    not_json = [ '.png', '.jpg', '.jpeg', '.dds', '.tga',
-                 '.mp3', '.ogg' ]
-    ignore = [ '.cgh', '.mb', '.txt' ] + \
-        [ _ext_format(e) for e in options.ignore_exts ]
-
     staticmax_root = options.staticmax_root
-    mapping_table = {}
-    build_deps = {}
 
-    for root, dirs, files in os.walk(asset_dir):
-        LOG.info("root: %s, dirs: %s, files: %s" % (root, dirs, files))
+    # Calc mapping table and build deps
 
-        root_rel = os.path.relpath(root, asset_dir)
-        for f in files:
-            f_fullpath = os.path.join(root, f).replace('\\', '/')
-            f_path = os.path.join(root_rel, f).replace('\\', '/')
-            f_hash = get_file_hash(f_fullpath)
-            f_ext = os.path.splitext(f)[1]
-
-            if f_ext in ignore:
-                continue
-
-            target_name = os.path.join(staticmax_root, f_hash + f_ext)
-            target_name = target_name.replace('\\', '/')
-
-            if not f_ext in not_json:
-                target_name = target_name + ".json"
-
-            mapping_table[f_path] = target_name
-            build_deps[f_fullpath] = target_name
-
-            LOG.info("FILE: %s (%s) -> %s" % (f_path, f_ext, target_name))
+    (mapping_table_object, build_deps) = gen_mapping(asset_dir,
+                                                     staticmax_root,
+                                                     options.ignore_exts)
 
     # Write the output(s)
 
-    mapping_table_object = { "urnmapping" : mapping_table }
     with open(options.output, 'wb') as f:
         simplejson.dump(mapping_table_object, f, separators=(',', ':'))
 
