@@ -579,9 +579,10 @@ def do_build_code(filepath, env, options):
         (appname, buildtype) = os.path.splitext(filename)
 
         html_templates = [ t + "/" + appname + ".html" for t in templates ]
-        html_templates = [ t for t in html_templates if os.path.exists(t) ]
-        print "HTML templates: %s" % html_templates
-        print "buildtype: %s" % buildtype
+        html_templates = [ os.path.split(t)[1] \
+                               for t in html_templates if os.path.exists(t) ]
+        # print "HTML templates: %s" % html_templates
+        # print "buildtype: %s" % buildtype
 
         if buildtype is not None:
             try:
@@ -958,12 +959,14 @@ def main():
 
     parser = OptionParser()
 
-    parser.add_option('--build-only', action='store_true', \
+    parser.add_option('--clean', action='store_true', \
                         default=False, \
                         help="Only builds")
     parser.add_option('--clean-only', action='store_true', \
                         default=False, \
                         help="Only cleans")
+    parser.add_option('--code-only', action='store_true', default=False,
+                      help="Build only the game code")
     parser.add_option('--find-non-ascii', action='store_true', default=False, help="Searches for non ascii characters in the scripts")
     parser.add_option('--development', action='store_true', \
                         help="Only builds the development build")
@@ -994,7 +997,7 @@ def main():
         return result
 
     # Clean build first
-    if not options.build_only:
+    if options.clean:
         result = clean(env, options)
         if result != 0:
             print 'Failed to clean build'
@@ -1007,33 +1010,35 @@ def main():
         files = args
     else:
 
-        # Mapping table
+        if not options.code_only:
 
-        os.makedirs('staticmax')
-        (mapping_table_obj, build_deps) = gen_mapping('assets', 'staticmax')
+            # Mapping table
 
-        # Write mapping table
+            os.makedirs('staticmax')
+            (mapping_table_obj, build_deps) = gen_mapping('assets', 'staticmax')
 
-        with open('mapping_table.json', 'wb') as f:
-            json_dump(mapping_table_obj, f, separators=(',', ':'))
+            # Write mapping table
 
-        # Build all asset files
+            with open('mapping_table.json', 'wb') as f:
+                json_dump(mapping_table_obj, f, separators=(',', ':'))
 
-        print "Deps: %s" % build_deps
+            # Build all asset files
 
-        for src in build_deps:
-            dest = build_deps[src]
-            print "Building %s -> %s" % (src, dest)
+            print "Deps: %s" % build_deps
 
-            result = do_build(src, dest, env, options)
-            if result:
-                print "Build failed"
-                exit(1)
+            for src in build_deps:
+                dest = build_deps[src]
+                print "Building %s -> %s" % (src, dest)
+
+                result = do_build(src, dest, env, options)
+                if result:
+                    print "Build failed"
+                    exit(1)
 
         # Code
 
         code_files = glob.glob('templates/*.js')
-        print "CODE FILES: %s" % code_files
+        # print "CODE FILES: %s" % code_files
 
         for f in code_files:
             print " F: %s" % f
