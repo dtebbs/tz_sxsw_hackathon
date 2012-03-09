@@ -119,8 +119,9 @@ def main():
 
     # Write the output(s)
 
+    mapping_table_object = { "urnmapping" : mapping_table }
     with open(options.output, 'wb') as f:
-        simplejson.dump(mapping_table, f, separators=(',', ':'))
+        simplejson.dump(mapping_table_object, f, separators=(',', ':'))
 
     if options.depfile:
         with open(options.depfile, 'wb') as f:
