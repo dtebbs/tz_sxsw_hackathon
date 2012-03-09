@@ -44,7 +44,7 @@ def check_path_py_tools(env, options):
     except KeyError as e:
         print "[Error] Missing required env: %s " % str(e)
         return (env_name, None)
-    
+
     if turbulenz_os == 'macox' or turbulenz_os == 'linux64' or turbulenz_os or 'linux32':
         path = os.path.join(env_path, 'bin')
     elif turbulenz_os == 'win32':
@@ -61,11 +61,11 @@ def check_path_py_tools(env, options):
 
 
 def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, default_arg=None):
-    
+
     if env_name is None or env_name == '':
         print "[Error] No env_name specified"
         return (None, None)
-        
+
     if options.verbose:
         print "[Info] Checking: " + tool_name
     tool = None
@@ -83,17 +83,17 @@ def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, defau
     else:
         print "[Error] Platform not recognised. Cannot configure build."
         return (env_name, None)
-        
+
     # Check tool runs
     if options.verbose:
         print "[Info] Calling tool: " + tool
     args = [tool]
     if default_arg:
         args.append(default_arg)
-    try: 
+    try:
         result = exec_command(args, verbose=options.verbose, console=options.verbose)
     except CalledProcessError:
-        print "[Warning] Failed to run tool as: " 
+        print "[Warning] Failed to run tool as: "
         print args
         print "[Warning] You're environment may not be setup correctly"
 
@@ -120,10 +120,10 @@ def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, defau
             print "[Error] Failed to run tool as: "
             print args
             print "[Error] Tool not found in standard locations"
-            return (env_name, None)  
+            return (env_name, None)
 
     # Tool runs, check version
-    env[env_name] = tool 
+    env[env_name] = tool
 
     if options.verbose:
         print "[Info] Checking version"
@@ -135,7 +135,7 @@ def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, defau
             if result != exp_version_str:
                 print "[Error] Tool version returned: %s" % result
                 return False
-                
+
         except CalledProcessError:
             print "[Error] Tool failed to print version"
             return False
@@ -143,7 +143,7 @@ def check_py_tool(env_name, tool_name, env, options, exp_version_str=None, defau
     return (env_name, tool)
 
 def check_cgfx_tool(env, options):
-    
+
     env_name = 'CGFX2JSON'
     try:
         tools_root = env['TOOLS_ROOT']
@@ -179,7 +179,7 @@ def configure(env, options):
     exe = ''
     turbulenz_os = ''
     result = False
-    
+
     system_name = system()
     machine_name = machine()
     if system_name == 'Linux':
@@ -198,8 +198,8 @@ def configure(env, options):
 
     env['TURBULENZ_OS'] = turbulenz_os
     env['EXE_EXT_OS'] = exe
-        
-        
+
+
     try:
         engine_version_minor = StrictVersion('.'.join(ENGINEVERSION.split('.')[0:2]))
         engine_version = StrictVersion(ENGINEVERSION)
@@ -208,7 +208,7 @@ def configure(env, options):
     except ValueError:
         print "[Error]: Version of Engine not recognised: %s" % ENGINEVERSION
         return False
-        
+
     try:
         sdk_version_minor = StrictVersion('.'.join(SDKVERSION.split('.')[0:2]))
         sdk_version = StrictVersion(SDKVERSION)
@@ -217,15 +217,15 @@ def configure(env, options):
     except ValueError:
         print "[Error]: Version of SDK not recognised: %s" % SDKVERSION
         return False
-        
+
     if engine_version != sdk_version:
         if options.verbose:
             print "[Warning]: Target engine and SDK version don't match. Engine: %s, SDK: %s" % (engine_version, sdk_version)
-        
+
     if engine_version_minor != sdk_version_minor:
         print "[Error]: Target engine and SDK minor versions are not compatible. Engine: %s, SDK: %s" % (engine_version_minor, sdk_version_minor)
         return False
-    
+
     if 'USER_SDK_PATH' in globals():
         sdk_root = os.path.expanduser(USER_SDK_PATH)
     else:
@@ -236,20 +236,20 @@ def configure(env, options):
         else:
             print "[Error] Platform not recognised. Cannot configure build."
             return False
-    
+
     if not os.path.exists(sdk_root):
         print "Can't find the SDK specified: %s" % sdk_root
         print "If you are using a non-standard SDK path, set it in this file using USER_SDK_PATH"
         return False
-    
+
     # Check expected env
     env_path = os.environ['VIRTUAL_ENV']
-    
+
     if 'USER_ENV_PATH' in globals():
         env_path_expt = USER_ENV_PATH
     else:
         env_path_expt = os.path.join(sdk_root, 'env')
-        
+
     if env_path != env_path_expt:
         print "[Error] The environment you are running from is not the same as expected for the target SDK"
         print "Expected: %s, Actual: %s" % (env_path_expt, env_path)
@@ -258,8 +258,8 @@ def configure(env, options):
         return False
 
     env['ENV_PATH'] = env_path
-   
-        
+
+
     env['APP_ROOT'] = app_root
     env['APP_PAIR'] = (app_root + ',./')
     env['SDK_ROOT'] = sdk_root
@@ -270,7 +270,7 @@ def configure(env, options):
     (_, pytools_root) = check_path_py_tools(env, options)
     if pytools_root is None:
         print "[Warning] Path pytools_root has not been set (optional)"
-    
+
     # Check for the existence of tools
     if sdk_version < StrictVersion('0.19.0'):
         required = dict(JS2TZJS=True, \
@@ -314,7 +314,7 @@ def configure(env, options):
                                 return False
                         else:
                                 print "[Warning] Couldn't find makehtml tool (optional)"
-             
+
         if env_name == 'CGFX2JSON':
                 (CGFX2JSON, cgfx2json) = check_cgfx_tool(env, options)
                 if cgfx2json is None:
@@ -323,7 +323,7 @@ def configure(env, options):
                                 return False
                         else:
                                 print "[Warning] Couldn't find cgfx2json tool (optional)"
-    
+
     env['APP_STATICMAX'] = os.path.join(app_root, 'staticmax')
     env['APP_TEMPLATES'] = os.path.join(app_root, 'templates')
     env['APP_SHADERS'] = os.path.join(app_root, 'assets', 'shaders')
@@ -333,12 +333,12 @@ def configure(env, options):
     env['APP_SOUNDS'] = os.path.join(app_root, 'assets', 'sounds')
     env['APP_FONTS'] = os.path.join(app_root, 'assets', 'fonts')
     env['APP_SCRIPTS'] = os.path.join(app_root, 'scripts')
-    
+
     if 'USER_APP_JSLIB_PATH' in globals():
         env['APP_JSLIB'] = os.path.join(app_root, USER_APP_JSLIB_PATH)
     else:
         env['APP_JSLIB'] = os.path.join(app_root)
-    
+
     return True
 
 # pylint: disable=W0231
@@ -480,7 +480,7 @@ def run_js2tzjs(task):
             '--ev', env['ENGINE_VERSION_STR']]
 
     return exec_command(args, verbose=task['options'].verbose, console=True)
-    
+
 def run_js2tzjs_jsinc(task):
     src = task['inputs'][0]
     tgt = task['outputs'][0]
@@ -513,24 +513,24 @@ def run_cgfx2json(env, options, input=None, output=None):
         return exec_command(args, verbose=options.verbose, console=True)
 
 def clean(env, options):
-        
+
     result = 0
-    
+
     try:
         # Clean staticmax
         removeDir(env['APP_STATICMAX'], options)
-        
+
         # Clean mapping_table
         mapping_path = os.path.join(env['APP_ROOT'], 'mapping_table.json')
         if os.path.exists(mapping_path):
                 os.remove(mapping_path)
-        
+
         # Aggressive root level cleaning
         for f in os.listdir(env['APP_ROOT']):
             (filename, ext) = os.path.splitext(f)
-            
+
             # Also cleans previous SDK content e.g. .jsinc
-            
+
             # Clean .jsinc
             if ext == '.jsinc':
                 os.remove(f)
@@ -552,16 +552,16 @@ def clean(env, options):
         print 'Failed to remove: %s' % str(e)
         result = 1
     return result
-    
+
 def build(files, env, options):
-    
+
     builderror = 0
     templates=[env['APP_ROOT'], env['APP_TEMPLATES'], env['APP_JSLIB']]
-    
+
     for f in files:
-        filepath = f.lower() 
+        filepath = f.lower()
         (filename, ext) = os.path.splitext(f)
-        
+
         if ext == '.html':
             (appname, buildtype) = os.path.splitext(filename)
             if buildtype is not None:
@@ -574,7 +574,7 @@ def build(files, env, options):
                                     'env': env,
                                     'options': options
                                 })
-                            
+
                         elif buildtype == '.release':
                             run_html_rel({
                                     'inputs': [appname + '.html'],
@@ -587,17 +587,17 @@ def build(files, env, options):
                         if buildtype == '.development':
                             if options.verbose:
                                 print "[Warning] 'development' should now be 'debug' and has not been built. Change the name of the destination file"
-                        else: 
+                        else:
                             if target == '.canvas':
                                 if buildtype == '.debug':
-                                        run_makehtml(env, options, 
+                                        run_makehtml(env, options,
                                                 input=(appname + '.js'),
                                                 mode='canvas-debug',
                                                 output=filepath,
                                                 templates=templates,
                                                 template=(appname + '.html'))
                                 elif buildtype == '.release':
-                                        run_makehtml(env, options, 
+                                        run_makehtml(env, options,
                                                 input=(appname + '.js'),
                                                 mode='canvas',
                                                 output=filepath,
@@ -611,13 +611,13 @@ def build(files, env, options):
                                 (appname, defaultTarget) = os.path.splitext(appname)
                                 if defaultTarget == '.canvas':
                                     if buildtype == '.debug':
-                                        run_makehtml(env, options, 
+                                        run_makehtml(env, options,
                                                 input=(appname + '.js'),
                                                 mode='canvas-debug',
                                                 output=filepath,
                                                 templates=templates)
                                     elif buildtype == '.release':
-                                        run_makehtml(env, options, 
+                                        run_makehtml(env, options,
                                                 input=(appname + '.js'),
                                                 mode='canvas',
                                                 code=(appname + defaultTarget + '.js'),
@@ -628,13 +628,13 @@ def build(files, env, options):
                                             print "[Warning] Build type not recognised: %s" % buildtype
                                 if defaultTarget == '':
                                     if buildtype == '.debug':
-                                        run_makehtml(env, options, 
+                                        run_makehtml(env, options,
                                                 input=(appname + '.js'),
                                                 mode='plugin-debug',
                                                 output=filepath,
                                                 templates=templates)
                                     elif buildtype == '.release':
-                                        run_makehtml(env, options, 
+                                        run_makehtml(env, options,
                                                 input=(appname + '.js'),
                                                 mode='plugin',
                                                 code=(appname + '.tzjs'),
@@ -644,13 +644,13 @@ def build(files, env, options):
                                         if options.verbose:
                                             print "[Warning] Build type not recognised: %s" % buildtype
                                 if buildtype == '.debug':
-                                    run_makehtml(env, options, 
+                                    run_makehtml(env, options,
                                             input=(appname + '.js'),
                                             mode='plugin-debug',
                                             output=filepath,
                                             templates=templates)
                                 elif buildtype == '.release':
-                                    run_makehtml(env, options, 
+                                    run_makehtml(env, options,
                                             input=(appname + '.js'),
                                             mode='plugin',
                                             output=filepath,
@@ -661,14 +661,14 @@ def build(files, env, options):
                             elif target == '':
                                 # Blank target is plugin
                                 if buildtype == '.debug':
-                                    run_makehtml(env, options, 
+                                    run_makehtml(env, options,
                                             input=(appname + '.js'),
                                             mode='plugin-debug',
                                             output=filepath,
                                             templates=templates,
                                             template=(appname + '.html'))
                                 elif buildtype == '.release':
-                                    run_makehtml(env, options, 
+                                    run_makehtml(env, options,
                                             input=(appname + '.js'),
                                             mode='plugin',
                                             code=(appname + target + '.tzjs'),
@@ -684,7 +684,7 @@ def build(files, env, options):
                 except CalledProcessError as e:
                     builderror = 1
                     print '[ERROR] Command failed: ' + str(e)
-                    
+
         elif ext == '.tzjs':
             try:
                 if env['SDK_VERSION'] < StrictVersion('0.19.0'):
@@ -708,7 +708,7 @@ def build(files, env, options):
             except CalledProcessError as e:
                 builderror = 1
                 print '[ERROR] Command failed: ' + str(e)
-        
+
         elif ext == '.js':
             try:
                 if env['SDK_VERSION'] >= StrictVersion('0.19.0'):
@@ -725,7 +725,7 @@ def build(files, env, options):
             except CalledProcessError as e:
                 builderror = 1
                 print '[ERROR] Command failed: ' + str(e)
-            
+
         elif ext == '.jsinc':
             try:
                 run_js2tzjs_jsinc({
@@ -748,19 +748,19 @@ def build(files, env, options):
             except CalledProcessError as e:
                 builderror = 1
                 print '[ERROR] Command failed: ' + str(e)
-    
+
     return builderror
 
 def json2yaml(source_filename, dest_filename, is_mapping_table):
-    
+
     json_filename = '%s.json' % source_filename
     yaml_filename = '%s.yaml' % dest_filename
-    
+
     result = 0
-    
+
     json_file = None
     yaml_file = None
-    
+
     try:
         json_file = open(json_filename, 'r')
         yaml_file = open(yaml_filename, 'w')
@@ -791,27 +791,27 @@ def json2yaml(source_filename, dest_filename, is_mapping_table):
                 except KeyError:
                     print 'No version information in mapping table'
                     result = 1
-            else:   
+            else:
                 yaml.dump(json_dict, yaml_file, default_flow_style=False)
-            
+
     if json_file is not None:
         json_file.close()
-        
+
     if yaml_file is not None:
         yaml_file.close()
-        
+
     return result
 
 def yaml2json(source_filename, dest_filename, is_mapping_table, env, options, indent=0):
-    
+
     json_filename = '%s.json' % dest_filename
     yaml_filename = '%s.yaml' % source_filename
-    
+
     result = 0
-    
+
     json_file = None
     yaml_file = None
-    
+
     try:
         json_file = open(json_filename, 'w')
         yaml_file = open(yaml_filename, 'r')
@@ -827,11 +827,11 @@ def yaml2json(source_filename, dest_filename, is_mapping_table, env, options, in
             if is_mapping_table:
                 # Support for version 1.0
                 yaml_dict = { 'version': 1.0 }
-                
+
                 staticmax_path = env['APP_STATICMAX']
                 if not os.path.isdir(staticmax_path):
                     os.makedirs(staticmax_path)
-                
+
                 # Process assets
                 for entry in yaml_data:
                     src = yaml_data[entry]
@@ -846,7 +846,7 @@ def yaml2json(source_filename, dest_filename, is_mapping_table, env, options, in
                             yaml_data[entry] = hash
                     else:
                         print "No hash available for: %s" % src
-                    
+
                 yaml_dict['urnmapping'] = yaml_data
             else:
                 yaml_dict = yaml_data
@@ -858,13 +858,13 @@ def yaml2json(source_filename, dest_filename, is_mapping_table, env, options, in
             except TypeError as e:
                 print str(e)
                 result = 1
-            
+
     if json_file is not None:
         json_file.close()
-        
+
     if yaml_file is not None:
         yaml_file.close()
-        
+
     return result
 
 def get_target_hash(target_filepath, target_ext):
@@ -892,7 +892,7 @@ def get_staticmax_name(output):
     hash_value = get_target_hash(output, final_ext.lower())
     if hash_value is None:
         return None
-    
+
     (source_path, source_ext) = os.path.splitext(final_path)
     if source_ext is None:
         # Single ext
@@ -927,17 +927,17 @@ def find_non_ascii(path, env, options):
                     print '%s: Non ASCII character at line:%s char:%s' % (filepath,line,char)
                     non_ascii_count += 1
             data.close()
-        
+
     return non_ascii_count
-    
+
 def main():
-    
+
     result = 0
     env = {}
-    
+
     templates = ['app']
     shaders = [] # Ignore temporarily ['draw2D']
-    
+
     parser = OptionParser()
     parser.add_option('--build-only', action='store_true', \
                         default=False, \
@@ -951,12 +951,12 @@ def main():
     parser.add_option('--verbose', action='store_true', \
                         help="Prints additional information about the build process")
     (options, args) = parser.parse_args()
-    
+
     if not configure(env, options):
         result = 1
         print 'Failed to configure build'
         return result
-    
+
     if options.find_non_ascii:
         result = find_non_ascii(env['APP_SCRIPTS'], env, options)
         if result != 0:
@@ -964,7 +964,7 @@ def main():
         else:
             print "Only ASCII found!"
         return result
-    
+
     # Clean only
     if options.clean_only:
         result = clean(env, options)
@@ -973,40 +973,40 @@ def main():
         else:
             print 'Cleaned'
         return result
-    
+
     # Clean build first
     if not options.build_only:
         result = clean(env, options)
         if result != 0:
             print 'Failed to clean build'
             return result
-        
+
         print 'Cleaned'
-    
+
     # Asset build
     if len(args) > 0:
         files = args
     else:
-        files = []  
+        files = []
         for s in shaders:
             files.append('%s.cgfx' % s)
-            
+
         result = build(files, env, options)
         if result == 0:
             print 'Built Assets'
         else:
             print 'Failed to build assets'
             return result
-    
+
     if yaml2json('mapping_table', 'mapping_table', True, env, options) == 0:
         print 'Built Mapping Table'
     else:
         print 'Failed Mapping Table'
-       
+
     if len(args) > 0:
         files = args
     else:
-        files = []  
+        files = []
         for t in templates:
             if options.development:
                 if env['SDK_VERSION'] < StrictVersion('0.19.0'):
@@ -1025,13 +1025,13 @@ def main():
                     # Order is important
                     files.append('%s.debug.html' % t)
                     files.append('%s.default.debug.html' % t)
-                    
+
                     files.append('%s.canvas.debug.html' % t)
                     files.append('%s.canvas.default.debug.html' % t)
-                    
+
                     files.append('%s.tzjs' % t)
                     files.append('%s.release.html' % t)
-                    
+
                     files.append('%s.canvas.js' % t)
                     files.append('%s.canvas.release.html' % t)
 
@@ -1040,7 +1040,7 @@ def main():
         print 'Built Templates'
     else:
         print 'Failed Templates'
-    
+
     return result
 
 if __name__ == "__main__":
