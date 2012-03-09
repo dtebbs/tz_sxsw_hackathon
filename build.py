@@ -18,7 +18,7 @@ from optparse import OptionParser
 
 from distutils.version import StrictVersion
 
-BUILDVERSION = '0.9.0'
+BUILDVERSION = '0.9.1'
 
 ENGINEVERSION = '0.19.0'
 SDKVERSION = '0.19.0'
