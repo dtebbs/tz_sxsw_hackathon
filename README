@@ -3,6 +3,8 @@ Extra tools and code for Turbulenz.
 build.py
 ~~~~~~~~
 
+(Must be run from within the Turbulenz SDK env)
+
 Run from a game project root.  The tool will create a mapping table
 and build all assets contained in the 'assets' directory.  It will
 also build the .html and JS code for each .js file in the 'templates'
